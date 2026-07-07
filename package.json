@@ -1,0 +1,31 @@
+{
+  "name": "appin-timetable-parser",
+  "version": "0.1.0",
+  "description": "압핀(유원테크) 시간표 서버(sgpap.com)에서 학교 시간표를 가져와 해석하는 의존성 없는 파서",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "example": "node example.js",
+    "test": "node test/parse.test.js"
+  },
+  "keywords": [
+    "appin",
+    "압핀",
+    "timetable",
+    "시간표",
+    "ywtek",
+    "sgpap",
+    "school",
+    "parser"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "example.js",
+    "README.md",
+    "LICENSE"
+  ]
+}

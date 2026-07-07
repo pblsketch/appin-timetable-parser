@@ -1,0 +1,8 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+*.log
+.env
+# 실제 학교 데이터는 저장소에 담지 않는다
+data/
+*.dump
