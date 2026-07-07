@@ -127,20 +127,41 @@ if (r.found) console.log(r.webdir); // 예: '0000'
 >
 > `getupdir` 는 **정확한 등록명에만** 매칭합니다(부분 검색 없음). "○○고" vs "○○고등학교", 띄어쓰기까지 학교가 등록한 표기와 정확히 일치해야 합니다.
 
+## 학급 시간표 가져오기 (대상↔학급 매핑)
+
+실측으로 확인한 규칙:
+
+- **학급 라벨 `"<학년>-<반>"`** — `getElements().elements` 가 `['1-1','1-2',…,'3-9']` 처럼 학년-반 순서로 나옵니다. 예: `'2-3'` = 2학년 3반.
+- **파일의 N번째 줄 = 원소 목록의 N번째 학급** — `h<주차>.txt` / `g<주차>.txt` 의 각 줄이 `elements` 와 같은 순서로 대응합니다.
+- **파일 번호 = 주차(week)** — `h2.txt`, `h3.txt` … 는 서로 다른 주의 시간표입니다.
+
+```js
+const { elements } = await appin.getElements(webdir);
+const idx = appin.classIndexOf(elements, '2-3'); // 2학년 3반의 줄 인덱스
+const week = 2;                                   // 원하는 주차
+const row = await appin.getClassTimetable(webdir, week, idx);          // 과목만
+const roomRow = await appin.getClassTimetable(webdir, week, idx, { withRooms: true }); // 과목/교실
+// row[요일][교시] = { subject, room } | null
+```
+
+> 셀에 붙는 `A/B/C/D` 접두나 `@B공강@K` 같은 마커는 고교학점제 선택과목 분반·공강 등을 나타냅니다.
+
 ## API
 
+- `resolveSchool(city, name)` → `{ found, raw, webdir?, date? }`
 - `getElements(webdir)` → `{ status, elements, indices, movementRooms, raw }`
+- `classIndexOf(elements, label)` → `number` (학급 라벨 → 줄 인덱스, 없으면 -1)
+- `getClassTimetable(webdir, week, classIndex, opts?)` → `rows[요일][교시]` (opts.withRooms 로 교실 포함)
 - `getTimetable(webdir, filename, opts?)` → `{ filename, rows, text }`
 - `parseGrid(text, opts?)` → `rows[대상][요일][교시]`
 - `parseCell(raw)` → `{ subject, room, raw } | null`
-- `resolveSchool(city, name)` → `{ found, raw, webdir? }`
 - `listFiles(webdir)` → `string[]` (해당 학교 폴더의 파일명)
 - `fetchStatic(webdir, filename)` → EUC-KR 디코딩된 원문
 
 ## 알려진 한계
 
 - **교사 이름은 서버에 없습니다.** 교사 시간표는 `t<번호>.txt`처럼 **번호**로만 접근되고, 이름↔번호 매핑은 학교 내부 관리 프로그램에만 있는 것으로 보입니다. 즉 "교사 이름으로 검색"은 이 서버만으로는 불가능합니다.
-- **학급의 의미는 학교마다 편차**가 있습니다(고교학점제 이동수업 때문에 파일/줄 구성이 단순 "한 반=한 줄"이 아닐 수 있음). `parseGrid` 는 격자 자체는 정확히 구조화하지만, "몇 학년 몇 반"에의 정확한 대응은 학교별로 다를 수 있습니다.
+- **대상↔학급 매핑**(줄 순서 = `elements` 순서, 라벨 = 학년-반)은 실측 학교들에서 확인했으나, 학교 설정에 따라 편차가 있을 수 있습니다. **"현재 주차"를 자동으로 고르는 기능은 없습니다**(원하는 `week` 파일 번호를 지정해야 함).
 - **`/tm/` 의 폴더 수 ≠ 실제 학교 수.** 폴더에는 빈/테스트/폐기 항목이 다수 섞여 있어, 표본 조사상 실제 데이터를 가진 폴더는 전체의 1/3 수준입니다.
 - 규격은 유원테크가 단독으로 운영·변경합니다. 언제든 바뀔 수 있습니다.
 

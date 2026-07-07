@@ -157,6 +157,30 @@ async function getTimetable(webdir, filename, opts = {}) {
   return { filename, rows: parseGrid(text, opts), text };
 }
 
+/**
+ * dnele 원소(학급) 목록에서 라벨의 줄 인덱스를 찾는다.
+ * 시간표 파일의 "N번째 줄" 이 "getElements().elements 의 N번째 학급" 에 대응한다(실측 확인).
+ * 학급 라벨은 `"<학년>-<반>"` 형식이다. 예: '2-3' → 2학년 3반.
+ * @returns {number} 0-기반 인덱스, 없으면 -1
+ */
+function classIndexOf(elements, label) {
+  return elements.indexOf(label);
+}
+
+/**
+ * 특정 학급의 한 주간 시간표를 가져온다.
+ * @param {string} webdir 학교 코드
+ * @param {number|string} week h/g 파일 번호(= 주차). 예: 2 → 'h2.txt'
+ * @param {number} classIndex getElements().elements 기준 0-기반 인덱스(classIndexOf 로 구함)
+ * @param {object} [opts] { withRooms?: boolean } withRooms 면 g 파일(과목/교실) 사용
+ * @returns {Promise<(object|null)[][]|null>} [요일][교시] 또는 null
+ */
+async function getClassTimetable(webdir, week, classIndex, opts = {}) {
+  const prefix = opts.withRooms ? 'g' : 'h';
+  const { rows } = await getTimetable(webdir, `${prefix}${week}.txt`, opts);
+  return rows[classIndex] || null;
+}
+
 module.exports = {
   BASE,
   fetchStatic,
@@ -166,4 +190,6 @@ module.exports = {
   getElements,
   listFiles,
   getTimetable,
+  classIndexOf,
+  getClassTimetable,
 };
