@@ -2,20 +2,26 @@
 
 // 네트워크 없이 파서 로직만 검증하는 간단한 테스트.
 const assert = require('node:assert');
-const { parseGrid, parseCell, estimateWeekFromDate } = require('../src');
+const {
+  parseGrid,
+  parseCell,
+  parsePeriodTimes,
+  weekNoFromDate,
+  estimateWeekFromDate,
+} = require('../src');
 
 // 1) 빈 칸
 assert.strictEqual(parseCell(''), null);
 assert.strictEqual(parseCell('^'.replace('^', '')), null);
 
 // 2) 과목만
-assert.deepStrictEqual(parseCell('국어'), { subject: '국어', room: null, raw: '국어' });
+assert.deepStrictEqual(parseCell('국어'), { subject: '국어', ref: null, raw: '국어' });
 
-// 3) 과목/교실
-assert.deepStrictEqual(parseCell('공통수학1/101'), {
-  subject: '공통수학1',
-  room: '101',
-  raw: '공통수학1/101',
+// 3) 과목/대상 — g·t 파일의 `/` 뒤는 학급 라벨(교실 번호가 아님)
+assert.deepStrictEqual(parseCell('공통국어1/1-7'), {
+  subject: '공통국어1',
+  ref: '1-7',
+  raw: '공통국어1/1-7',
 });
 
 // 4) 서식 마커 제거
@@ -37,11 +43,20 @@ const multi = parseGrid('국어,수학\n영어,과학');
 assert.strictEqual(multi.length, 2);
 assert.strictEqual(multi[1][0][0].subject, '영어');
 
-// 7) 주차 추정: getupdir 날짜(마지막 주차 앵커) 기반
-//    anchor 20270220 = 53주차 기준 → 2026-07-07 은 20주차(실측 확인값)
+// 7) 교시 시작시각(s<N>.txt) 파싱 — 실측 학남고 s20.txt 형식
+assert.deepStrictEqual(
+  parsePeriodTimes('0830093010301130132014201520        0830093010301130132014201520'),
+  ['08:30', '09:30', '10:30', '11:30', '13:20', '14:20', '15:20'],
+);
+assert.deepStrictEqual(parsePeriodTimes(''), []);
+
+// 8) 날짜 → 주차(권장). 실측: 2026-07-06(월) 주 = 20주차, h20.txt == hbtime wkno=20
+assert.strictEqual(weekNoFromDate(new Date('2026-07-06')), 20);
+assert.strictEqual(weekNoFromDate(new Date('2026-07-07')), 20, '같은 주 화요일도 20');
+assert.strictEqual(weekNoFromDate(new Date('2026-06-29')), 19, '한 주 전은 19');
+
+// 9) getupdir 날짜 추정(러프, deprecated) — 함수는 남아 있으나 ±1 오차 가능
 assert.strictEqual(estimateWeekFromDate('20270220', 53, new Date('2026-07-07')), 20);
-assert.strictEqual(estimateWeekFromDate('20270220', 53, new Date('2026-06-15')), 17);
-// clamp: 앵커보다 훨씬 이후면 마지막 주차로
 assert.strictEqual(estimateWeekFromDate('20270220', 53, new Date('2027-12-31')), 53);
 assert.strictEqual(estimateWeekFromDate('20270220', 53, new Date('2025-01-01')), 1);
 

@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "example": "node example.js",
-    "test": "node test/parse.test.js"
+    "test": "node test/parse.test.js",
+    "test:live": "APPIN_LIVE=1 node test/live.test.js"
   },
   "keywords": [
     "appin",
