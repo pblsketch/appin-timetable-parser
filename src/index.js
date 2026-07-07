@@ -132,19 +132,93 @@ async function getElements(webdir, timeoutMs) {
 }
 
 /**
- * 학교 폴더의 파일 목록(디렉터리 인덱스)을 파싱한다.
- * 반환 예: ['ele.txt','h1.txt','h1.inx','g1.txt','t1.txt', ...]
+ * 학교 폴더의 파일 목록을 수정일·크기까지 파싱한다.
+ * @returns {Promise<Array<{name:string, modified:Date|null, size:string}>>}
  */
-async function listFiles(webdir, timeoutMs) {
+async function listFilesDetailed(webdir, timeoutMs) {
   const url = `${BASE}/tm/${encodeURIComponent(webdir)}/`;
   const res = await timedFetch(url, { headers: { 'User-Agent': 'appin-timetable-parser' } }, timeoutMs);
   if (!res.ok) throw new Error(`listFiles: HTTP ${res.status}`);
   const html = await res.text();
   const out = [];
-  const re = /href="([^"?/][^"]*\.[a-zA-Z0-9]+)"/g;
+  const re = /<a href="([^"?/][^"]*\.[a-zA-Z0-9]+)">[^<]*<\/a>\s*<\/td>\s*<td[^>]*>\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2})?\s*<\/td>\s*<td[^>]*>\s*([\d.kKMGB-]+)/g;
   let m;
-  while ((m = re.exec(html)) !== null) out.push(m[1]);
+  while ((m = re.exec(html)) !== null) {
+    out.push({
+      name: m[1],
+      modified: m[2] ? new Date(m[2].replace(' ', 'T') + ':00') : null,
+      size: m[3],
+    });
+  }
   return out;
+}
+
+/**
+ * 학교 폴더의 파일명 목록(디렉터리 인덱스)을 파싱한다.
+ * 반환 예: ['ele.txt','h1.txt','h1.inx','g1.txt','t1.txt', ...]
+ */
+async function listFiles(webdir, timeoutMs) {
+  return (await listFilesDetailed(webdir, timeoutMs)).map((e) => e.name);
+}
+
+/** 'yyyymmdd' → Date(로컬 자정) */
+function parseYmd(s) {
+  return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)));
+}
+
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+
+/**
+ * getupdir 날짜 필드로 주차를 추정한다(순수 함수).
+ * 실측상 getupdir 의 날짜(yyyymmdd)는 대략 "마지막 주차(= h 파일 수)"의 기준일이라,
+ *   week ≈ totalWeeks - round((anchorDate - targetDate) / 7일)
+ * 로 계산한다. 최근/현재 날짜에서 정확도가 높고, 일반적으로 ±1주 오차가 있을 수 있다.
+ *
+ * @param {string} getupdirDate resolveSchool().date (yyyymmdd)
+ * @param {number} totalWeeks 학교 폴더의 h<N>.txt 개수
+ * @param {Date|string|number} [targetDate=now]
+ * @returns {number} 1..totalWeeks 로 clamp 된 주차
+ */
+function estimateWeekFromDate(getupdirDate, totalWeeks, targetDate = new Date()) {
+  const anchor = parseYmd(getupdirDate);
+  const target = targetDate instanceof Date ? targetDate : new Date(targetDate);
+  const diff = Math.round((anchor.getTime() - target.getTime()) / WEEK_MS);
+  const wk = totalWeeks - diff;
+  return Math.min(Math.max(wk, 1), totalWeeks);
+}
+
+/**
+ * 학교명으로 현재 주차를 추정한다(getupdir 날짜 + h 파일 수 기반).
+ * @returns {Promise<{webdir:string, week:number, totalWeeks:number, date:string}|null>}
+ */
+async function estimateCurrentWeek(city, schoolName, opts = {}) {
+  const school = await resolveSchool(city, schoolName, opts.timeoutMs);
+  if (!school.found || !school.webdir) return null;
+  const files = await listFiles(school.webdir, opts.timeoutMs);
+  const totalWeeks = files.filter((f) => /^h\d+\.txt$/.test(f)).length;
+  return {
+    webdir: school.webdir,
+    totalWeeks,
+    date: school.date,
+    week: estimateWeekFromDate(school.date, totalWeeks, opts.date || new Date()),
+  };
+}
+
+/**
+ * 현재 주차를 파일 "수정일"로 정밀 판정한다(webdir 만 필요, 더 정확).
+ * 학교가 매주 현재 주차 파일을 갱신하므로, 기준일 이하에서 가장 최근에 수정된
+ * h<N>.txt 의 N 이 현재(활성) 주차다.
+ * @returns {Promise<number|null>}
+ */
+async function currentWeekByUpdate(webdir, opts = {}) {
+  const asOf = opts.date ? new Date(opts.date) : new Date();
+  const entries = await listFilesDetailed(webdir, opts.timeoutMs);
+  const hs = entries
+    .filter((e) => /^h\d+\.txt$/.test(e.name) && e.modified && e.modified <= asOf)
+    .map((e) => ({ n: Number(e.name.slice(1, e.name.indexOf('.'))), modified: e.modified }));
+  if (!hs.length) return null;
+  hs.sort((a, b) => b.modified - a.modified || b.n - a.n);
+  return hs[0].n;
 }
 
 /**
@@ -189,7 +263,11 @@ module.exports = {
   resolveSchool,
   getElements,
   listFiles,
+  listFilesDetailed,
   getTimetable,
   classIndexOf,
   getClassTimetable,
+  estimateWeekFromDate,
+  estimateCurrentWeek,
+  currentWeekByUpdate,
 };

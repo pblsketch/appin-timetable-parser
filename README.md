@@ -146,6 +146,28 @@ const roomRow = await appin.getClassTimetable(webdir, week, idx, { withRooms: tr
 
 > 셀에 붙는 `A/B/C/D` 접두나 `@B공강@K` 같은 마커는 고교학점제 선택과목 분반·공강 등을 나타냅니다.
 
+## 현재 주차 알아내기
+
+시간표 파일 번호(`h<N>`)는 주차입니다. "지금 몇 주차인지"를 구하는 두 가지 방법을 제공합니다.
+
+**① getupdir 날짜 기반(학교명 필요, ±1주 오차 가능)** — `getupdir` 응답의 날짜 필드는 대략 마지막 주차의 기준일이라, 여기서 역산합니다.
+
+```js
+const cur = await appin.estimateCurrentWeek('OO시', 'OO고등학교');
+// { webdir, week, totalWeeks, date }  예: week === 20
+
+// 순수 함수로도 계산 가능
+appin.estimateWeekFromDate('20270220', 53, new Date('2026-07-07')); // → 20
+```
+
+**② 파일 수정일 기반(webdir만 필요, 더 정확)** — 학교가 매주 현재 주차 파일을 갱신하므로, 가장 최근에 수정된 `h<N>.txt` 가 현재 주차입니다.
+
+```js
+const week = await appin.currentWeekByUpdate(webdir); // → 20
+```
+
+> 두 방법 모두 실측 학교에서 같은 값을 냈습니다(현재 주차). 정확도가 중요하면 ②를, 학교명만 있으면 ①을 쓰세요.
+
 ## API
 
 - `resolveSchool(city, name)` → `{ found, raw, webdir?, date? }`
@@ -153,9 +175,12 @@ const roomRow = await appin.getClassTimetable(webdir, week, idx, { withRooms: tr
 - `classIndexOf(elements, label)` → `number` (학급 라벨 → 줄 인덱스, 없으면 -1)
 - `getClassTimetable(webdir, week, classIndex, opts?)` → `rows[요일][교시]` (opts.withRooms 로 교실 포함)
 - `getTimetable(webdir, filename, opts?)` → `{ filename, rows, text }`
+- `estimateCurrentWeek(city, name, opts?)` → `{ webdir, week, totalWeeks, date }` (getupdir 날짜 기반)
+- `estimateWeekFromDate(getupdirDate, totalWeeks, targetDate?)` → `number` (순수 함수)
+- `currentWeekByUpdate(webdir, opts?)` → `number` (파일 수정일 기반, 더 정확)
 - `parseGrid(text, opts?)` → `rows[대상][요일][교시]`
 - `parseCell(raw)` → `{ subject, room, raw } | null`
-- `listFiles(webdir)` → `string[]` (해당 학교 폴더의 파일명)
+- `listFiles(webdir)` → `string[]` (파일명) / `listFilesDetailed(webdir)` → `{name, modified, size}[]`
 - `fetchStatic(webdir, filename)` → EUC-KR 디코딩된 원문
 
 ## 알려진 한계
